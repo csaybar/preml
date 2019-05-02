@@ -6,7 +6,5 @@ __author__ = """Cesar Aybar Camacho"""
 __email__ = 'csaybar@gmail.com'
 __version__ = '0.1.0'
 
-from . import utils
-from . import models
-from . import preprocess
-from . import plots
+from .go_unique import go_unique
+from .fast_view import fast_view

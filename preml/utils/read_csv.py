@@ -1,3 +1,16 @@
+from __future__ import division, absolute_import, print_function
+
+__all__ = ['reduce_mem_usage', 'read_csv']
+
+import pandas as pd 
+import numpy as np
+
+def read_csv(file,**kwargs):
+    """create a dataframe and optimize its memory usage"""
+    df = pd.read_csv(file, parse_dates=True, keep_date_col=True, **kwargs)
+    df = reduce_mem_usage(df)
+    return df
+    
 def reduce_mem_usage(df):
   """ iterate through all the columns of a dataframe and modify the data type
   to reduce memory usage.        
@@ -33,10 +46,3 @@ def reduce_mem_usage(df):
   print('Decreased by {:.1f}%'.format(100 * (start_mem - end_mem) / start_mem))
   
   return df
-
-
-def read_csv(file,**kwargs):
-    """create a dataframe and optimize its memory usage"""
-    df = pd.read_csv(file, parse_dates=True, keep_date_col=True, **kwargs)
-    df = reduce_mem_usage(df)
-    return df

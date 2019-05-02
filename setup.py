@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 """The setup script."""
+#import os
+#os.chdir("/home/aybarpc01/Github/preml/")
 
 from setuptools import setup, find_packages
 
@@ -45,7 +47,7 @@ setup(
     include_package_data=True,
     keywords='preml',
     name='preml',
-    packages=find_packages(include=['preml']),
+    packages=find_packages(),
     setup_requires=setup_requirements,
     test_suite='tests',
     tests_require=test_requirements,

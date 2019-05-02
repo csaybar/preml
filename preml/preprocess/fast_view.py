@@ -1,18 +1,14 @@
-def get_object_unique(df):
-  '''
-    Object unique
-  '''
-  object_columns = (np.where(pd.Series([str(x) for x in df.dtypes.values])
-                      .isin(['object']))[0])
-                      
-  dict_object_uniques = {x:df[x].unique() 
-                         for x in df.iloc[:,object_columns].keys()}
-  return dict_object_uniques
+from __future__ import division, absolute_import, print_function
 
+__all__ = ['fast_view']
+
+from collections import Counter
+import pandas as pd
+import numpy as np
 
 def fast_view(df):
   '''
-    Fast View features 
+    Fast View features
   '''
   object_describe, numeric_describe = None,None
   cnt = Counter(df.dtypes)
