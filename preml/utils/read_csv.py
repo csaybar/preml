@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from __future__ import division, absolute_import, print_function
 
 __all__ = ['reduce_mem_usage', 'read_csv']
@@ -40,7 +42,8 @@ def reduce_mem_usage(df):
           else:
             df[col] = df[col].astype(np.float64)
     else:
-      df[col] = df[col].astype('category')
+      pass
+      #df[col] = df[col].astype('category')
   end_mem = df.memory_usage().sum() / 1024**2
   print('Memory usage after optimization is: {:.2f} MB'.format(end_mem))
   print('Decreased by {:.1f}%'.format(100 * (start_mem - end_mem) / start_mem))

@@ -1,22 +1,73 @@
+# -*- coding: utf-8 -*-
+
+from __future__ import division, absolute_import, print_function
+
+__all__ = ['LabelEncoder_NaN', 'TargetEncoder_NaN']
+
+from sklearn.preprocessing import LabelEncoder
+from category_encoders import TargetEncoder
 import pandas as pd
-import numpy as np
-from matplotlib import pyplot as plt
 
-class NBFeaturer(BaseEstimator):
-    def __init__(self, alpha):
-        self.alpha = alpha
+class LabelEncoder_NaN(LabelEncoder):
+  """
+  Encode labels with value between 0 and n_classes-1.
+  """
+  def __init__(self):
+    pass
     
-    def preprocess_x(self, x, r):
-        return x.multiply(r)
+  def fit(self, X, y=None):
+    return self
     
-    def pr(self, x, y_i, y):
-        p = x[y==y_i].sum(0)
-        return (p+self.alpha) / ((y==y_i).sum()+self.alpha)
+  def transform(self, X):
+    try:
+      df = X.copy()
+      df['__ref__'] = 1
+      func = lambda x:pd.Series(
+        data  = self.fit_transform(x[x.notnull()]),
+        index = x[x.notnull()].index
+      )
+      df_encoded = df.apply(func)
+      del df_encoded['__ref__']
+      return df_encoded  
+    except (AttributeError, TypeError):
+      raise AssertionError('Input variables should be Pandas.Data.Frame')
 
-    def fit(self, x, y=None):
-        self._r = sparse.csr_matrix(np.log(self.pr(x,1,y) / self.pr(x,0,y)))
-        return self
+
+class TargetEncoder_NaN(TargetEncoder):
+  """
+  Target encoding for categorical features.
+  
+  For the case of categorical target: features are replaced
+  with a blend of posterior probability of the target given
+  particular categorical value and prior probability of the
+  target over all the training data.
     
-    def transform(self, x):
-        x_nb = self.preprocess_x(x, self._r)
-        return x_nb
+  For  the  case  of  continuous  target: features are replaced
+  with a blend of expected value of the target given particular
+  categorical value and expected  value of the target  over all
+  the training data.
+  """
+  def __init__(self, 
+               verbose = 1,
+               cols = None,
+               drop_invariant = False,
+               return_df = True,
+               impute_missing = False,
+               handle_unknown = 'error',
+               min_samples_leaf = 10,
+               smoothing = 10):
+                 
+    super().__init__(verbose = 1,
+                     cols = cols,
+                     drop_invariant = drop_invariant,
+                     return_df = return_df,
+                     impute_missing = impute_missing,
+                     handle_unknown = handle_unknown,
+                     smoothing = smoothing)
+  def transform(self, X):
+    return super().transform(X)
+  def fit(self,X,y):
+    return super().fit(X, y)
+  def fit_transform(self, X, y):
+    self.fit(X, y)
+    return self.transform(X)

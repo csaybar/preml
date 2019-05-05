@@ -1,12 +1,23 @@
 # -*- coding: utf-8 -*-
-import subprocess
+from __future__ import division, absolute_import, print_function
 
-subprocess.call(['/home/aybarpc01/pypackages/preml/preml/packages.py'])
+__all__ = ['show_parameter', 'lr_decayp', 'lightgbm_fitparams', 
+           'lightgbm_SS', 'optim_f1_score']
 
-os.system('python3 /home/aybarpc01/pypackages/preml/preml/packages.py')
-np.absolute(-10)
 import lightgbm as lgbm
 
+def show_parameter(pipeline, models = None):
+  '''
+  Show all parameters of your pipeline
+  '''
+  for x in pipeline.get_params().keys():
+    if models == None:
+      print(x)
+    elif bool(re.search(str(models), x)):
+      print(x)
+    else:
+      pass
+      
 def lr_decayp(current_iter = 0.001,lr = 0.05,dcp = 0.99):
   '''
     learning rate with decay power
@@ -22,7 +33,7 @@ def lr_decayp(current_iter = 0.001,lr = 0.05,dcp = 0.99):
     nlr = lr  * np.power(dcp, current_iter)
     return nlr if nlr > 1e-3 else 1e-3
   return func_lr_dcp
-
+  
 def optim_f1_score(model,data,target,iterations = 100, rgn = [0,1]):
   """
   optim f1-score
@@ -35,7 +46,7 @@ def optim_f1_score(model,data,target,iterations = 100, rgn = [0,1]):
   return:
     Best f1-score found
   """
-  def optim_model(x):
+  def c(x):
     pred_df = pd.DataFrame(model.predict_proba(data))
     y_pred = (pred_df.iloc[:,1].values > x)*1
     return f1_score(target, y_pred)
@@ -44,13 +55,15 @@ def optim_f1_score(model,data,target,iterations = 100, rgn = [0,1]):
   return rango[f1_scores.idxmax()]
 
 def lightgbm_fitparams(**kwargs):
-  fit_params={"early_stopping_rounds":30, 
-              "eval_metric" : 'auc', 
+  fit_params = {
+              "early_stopping_rounds":30, 
+              "eval_metric" : 'auc',
               "eval_set" : [(None,None)],
               'eval_names': ['valid'],
-              #'callbacks': [lgbm.reset_parameter(learning_rate=lr_decayp())],
+              'callbacks': [lgbm.reset_parameter(learning_rate=lr_decayp())],
               'verbose': 100,
-              'categorical_feature': 'auto'}
+              'categorical_feature': 'auto'
+              }
   for key,value in kwargs.items():
     fit_params[key] = value
   return fit_params
@@ -59,18 +72,19 @@ def lightgbm_SS(**kwargs):
   search_spaces = {
     'learning_rate': (0.01, 1.0, 'log-uniform'),
     'num_leaves': (20, 100),      
-    'max_depth': (0, 50),
-    'min_child_samples': (0, 50),
+    'max_depth': (10, 50),
+    'min_child_samples': (5, 50),
     'max_bin': (100, 1000),
     'subsample': (0.01, 1.0, 'uniform'),
-    'subsample_freq': (0, 10),
+    'subsample_freq': (2, 10),
     'colsample_bytree': (0.01, 1.0, 'uniform'),
-    'min_child_weight': (0, 10),
+    'min_child_weight': (1, 10),
     'subsample_for_bin': (100000, 500000),
     'reg_lambda': (1e-9, 1000, 'log-uniform'),
     'reg_alpha': (1e-9, 1.0, 'log-uniform'),
     'scale_pos_weight': (1e-6, 500, 'log-uniform'),
-    'n_estimators': (50, 100)},
+    'n_estimators': (50, 100)}
+    
   for key,value in kwargs.items():
     search_spaces[key] = value
   return search_spaces

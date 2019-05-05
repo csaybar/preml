@@ -9,3 +9,5 @@ Sphinx==1.8.1
 twine==1.12.1
 pandas==0.23.4
 numpy==1.15.4
+category_encoders==2.0.0
+featuretools==0.7.1
