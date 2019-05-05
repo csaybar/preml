@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 from __future__ import division, absolute_import, print_function
 
 __all__ = ['LabelEncoder_NaN', 'TargetEncoder_NaN']
@@ -32,7 +31,6 @@ class LabelEncoder_NaN(LabelEncoder):
     except (AttributeError, TypeError):
       raise AssertionError('Input variables should be Pandas.Data.Frame')
 
-
 class TargetEncoder_NaN(TargetEncoder):
   """
   Target encoding for categorical features.
@@ -47,12 +45,12 @@ class TargetEncoder_NaN(TargetEncoder):
   categorical value and expected  value of the target  over all
   the training data.
   """
-  def __init__(self, 
+  def __init__(self,
                verbose = 1,
                cols = None,
                drop_invariant = False,
                return_df = True,
-               impute_missing = False,
+               handle_missing= 'return_nan',
                handle_unknown = 'error',
                min_samples_leaf = 10,
                smoothing = 10):
@@ -61,7 +59,7 @@ class TargetEncoder_NaN(TargetEncoder):
                      cols = cols,
                      drop_invariant = drop_invariant,
                      return_df = return_df,
-                     impute_missing = impute_missing,
+                     handle_missing = handle_missing,
                      handle_unknown = handle_unknown,
                      smoothing = smoothing)
   def transform(self, X):
