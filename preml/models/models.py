@@ -1,10 +1,72 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, absolute_import, print_function
 
-__all__ = ['show_parameter', 'lr_decayp', 'lightgbm_fitparams', 
+__all__ = ['bayesian_optimization','show_parameter', 'lr_decayp', 'lightgbm_fitparams', 
            'lightgbm_SS', 'optim_f1_score']
 
 import lightgbm as lgbm
+from sklearn.base import BaseEstimator
+
+
+class bayesian_optimization(BaseEstimator):
+  '''
+        Hyperopt - Tree-structured Parzen Estimator model
+  Bayesian search  over specified parameter values for an estimator.
+  
+  Parameters
+  ----------
+  params: A list of Parameter Expressions [('Parameter Expressions',**kwargs,type),(...),...].
+          A "Parameter Expressions" is the form that Hyperopt define the search space, 
+          for an extensive description of this parameter, see:
+          https://github.com/hyperopt/hyperopt/wiki/FMin
+          type: A String. Specify the Python data type of the hyperparameter.
+          
+  max_evals: An Integer. Allow up to this many function evaluations before returning. 
+  
+  cv_params: A dictionary that contains sklearn.model_selection.cross_val_score **kwargs.
+  
+  cv_stat: Statistical description function used to aggregate the 
+           sklearn.model_selection.cross_val_score values.
+  
+  Example
+  --------
+  Comming soon!
+  '''
+  def __init__(self,params,max_evals, cv_params, cv_stat = np.mean):
+    self.params = params
+    self.max_evals = max_evals
+    self.cv_params = cv_params
+    self.cv_stat = cv_stat
+    self.objective_model = self.__crt_objmodel()
+  
+  def create_params(self):
+    params_dict = dict()   
+    for hparams, param, _ in self.params:
+      params_dict[param['label']]= eval(hparams)(**param)
+    return params_dict
+    
+  def __crt_objmodel(self):            
+    def obj_model(parameters):
+      params = {param['label']:(eval(htype)(parameters[param['label']])) for _,param, htype in self.params}
+      self.cv_params['estimator'] = self.cv_params['estimator'].set_params(**params)
+      cv_values = cross_val_score(**self.cv_params)
+      score = cv_stat(cv_values)
+      print("Score: {:.3f} || params {}".format(score, params))      
+      return score      
+    return obj_model
+  
+  def fit(self):
+    best = fmin(fn=self.__crt_objmodel(),
+              space=self.create_params(),
+              algo=tpe.suggest,
+              max_evals=self.max_evals)
+    #Changing the Python data type of dict values
+    datatypes = [x[2] for x in self.params]
+    count = 0    
+    for key,value in best.items():
+      best[key] = eval(datatypes[count])(value)
+      count += 1    
+    return self.cv_params['estimator'].set_params(**best)
 
 def show_parameter(pipeline, models = None):
   '''
@@ -46,7 +108,7 @@ def optim_f1_score(model,data,target,iterations = 100, rgn = [0,1]):
   return:
     Best f1-score found
   """
-  def c(x):
+  def optim_model(x):
     pred_df = pd.DataFrame(model.predict_proba(data))
     y_pred = (pred_df.iloc[:,1].values > x)*1
     return f1_score(target, y_pred)
@@ -88,3 +150,4 @@ def lightgbm_SS(**kwargs):
   for key,value in kwargs.items():
     search_spaces[key] = value
   return search_spaces
+
