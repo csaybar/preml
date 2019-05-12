@@ -1,25 +1,25 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, absolute_import, print_function
 
-__all__ = ['bayesian_optimization','show_parameter', 'lr_decayp', 'lightgbm_fitparams', 
+__all__ = ['BayesianOptimization','show_parameter', 'lr_decayp', 'lightgbm_fitparams', 
            'lightgbm_SS', 'optim_f1_score']
 
 import lightgbm as lgbm
 from sklearn.base import BaseEstimator
-
-
-class bayesian_optimization(BaseEstimator):
+from hyperopt import hp
+from hyperopt import tpe
+from hyperopt.fmin import fmin
+import numpy as np
+class BayesianOptimization(BaseEstimator):
   '''
-        Hyperopt - Tree-structured Parzen Estimator model
-  Bayesian search  over specified parameter values for an estimator.
-  
+  Class wrapper for easily use of Hyperopt - Tree-structured Parzen Estimator model
+    
   Parameters
-  ----------
-  params: A list of Parameter Expressions [('Parameter Expressions',**kwargs,type),(...),...].
-          A "Parameter Expressions" is the form that Hyperopt define the search space, 
-          for an extensive description of this parameter, see:
-          https://github.com/hyperopt/hyperopt/wiki/FMin
-          type: A String. Specify the Python data type of the hyperparameter.
+  ----------    
+  params: A three element list that contains:
+      - Parameter Expressions (PE): Is the form that Hyperopt define the Search Space, for an extensive description of this parameter, see: https://github.com/hyperopt/hyperopt/wiki/FMin
+      - PE kwargs: A dictionary, contains the arguments of PE.
+      - Data Type: A string, indicate the DataType of PE kwargs.      
           
   max_evals: An Integer. Allow up to this many function evaluations before returning. 
   
@@ -28,44 +28,77 @@ class bayesian_optimization(BaseEstimator):
   cv_stat: Statistical description function used to aggregate the 
            sklearn.model_selection.cross_val_score values.
   
+  n_trials: Integer. Number of random trials
+  
+  minimize: Logical. Whether is True, the objective function would be minimized
+            otherwise would be maximized.
+  
+  Return
+  -------
+  The best model found.
+  
   Example
   --------
-  Comming soon!
+  from preml.model import BayesianOptimization
+  
+  ss = BayesianOptimization()  
+  best_model = ss.search()
+  
   '''
-  def __init__(self,params,max_evals, cv_params, cv_stat = np.mean):
+  def __init__(self,params,max_evals, cv_params, cv_stat = np.mean,n_trials = 1, minimize = True):
     self.params = params
     self.max_evals = max_evals
     self.cv_params = cv_params
     self.cv_stat = cv_stat
-    self.objective_model = self.__crt_objmodel()
-  
+    self.objective_model = self.__create_objectivefunction()
+    self.space = self.create_params()
+    self.minimize = minimize
+    self.n_trials = n_trials
+    
   def create_params(self):
     params_dict = dict()   
     for hparams, param, _ in self.params:
       params_dict[param['label']]= eval(hparams)(**param)
     return params_dict
     
-  def __crt_objmodel(self):            
+  def __create_objectivefunction(self):            
     def obj_model(parameters):
+      
+      # initialize parameters
       params = {param['label']:(eval(htype)(parameters[param['label']])) for _,param, htype in self.params}
       self.cv_params['estimator'] = self.cv_params['estimator'].set_params(**params)
-      cv_values = cross_val_score(**self.cv_params)
-      score = cv_stat(cv_values)
-      print("Score: {:.3f} || params {}".format(score, params))      
-      return score      
+      
+      # get score cross_val_score
+      trial_cv_values = []
+      
+      for x in range(self.n_trials):
+        cv_values = cross_val_score(**self.cv_params)
+        if self.minimize:
+          score = self.cv_stat(cv_values)*-1
+        else:
+          score = self.cv_stat(cv_values)      
+        trial_cv_values.append(score)
+        
+      trial_cv_values = np.array(trial_cv_values)
+      trial_cv_values_mean = np.mean(trial_cv_values)
+      trial_cv_values_std = np.std(trial_cv_values)
+      
+      print("Mean Score: {:.3f} +/- {:.3f} || params {}".format(trial_cv_values_mean,trial_cv_values_std, params))
+      
+      return trial_cv_values_mean
+    
     return obj_model
   
-  def fit(self):
-    best = fmin(fn=self.__crt_objmodel(),
-              space=self.create_params(),
+  def search(self):
+    best = fmin(fn=self.objective_model,
+              space=self.space,
               algo=tpe.suggest,
               max_evals=self.max_evals)
+    
     #Changing the Python data type of dict values
-    datatypes = [x[2] for x in self.params]
-    count = 0    
+    datatypes = {x[1]['label']:x[2] for x in self.params}
     for key,value in best.items():
-      best[key] = eval(datatypes[count])(value)
-      count += 1    
+      best[key] = eval(datatypes[key])(value)      
     return self.cv_params['estimator'].set_params(**best)
 
 def show_parameter(pipeline, models = None):
@@ -151,3 +184,6 @@ def lightgbm_SS(**kwargs):
     search_spaces[key] = value
   return search_spaces
 
+
+
+from hyperopt import hp, tpe
