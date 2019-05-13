@@ -1,7 +1,7 @@
 from __future__ import division, absolute_import, print_function
     
 __all__ = ["get_grouped_data", "draw_plots", "get_trend_changes",
-           "get_trend_correlation", "univariate_plotter", "univariate_plotter",
+           "get_trend_correlation", "univariate_plotter",
            "get_univariate_plots", "get_trend_stats"]
 
 import pandas as pd
@@ -386,3 +386,6 @@ def get_trend_stats(data, target_col, features_list=0, bins=10, data_test=0):
               ' ignored. Categorical features not supported yet.')
     print('Returning stats for all numeric features')
     return (stats_all_df)
+
+
+
