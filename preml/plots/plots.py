@@ -1,15 +1,15 @@
 from __future__ import division, absolute_import, print_function
     
-__all__ = ["get_grouped_data", "draw_plots", "get_trend_changes",
-           "get_trend_correlation", "univariate_plotter",
-           "get_univariate_plots", "get_trend_stats"]
+__all__ = ["DUplots"]
 
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 import itertools
     
-class DataUnderstandingPlots(object):
+import itertools
+import warnings
+class DUplots(object):
   """
   Create Beautiful and helpful plots for fast Data Understanding!
   
@@ -119,7 +119,7 @@ class DataUnderstandingPlots(object):
     
     if sum(target.isnull()) > 0:
       raise Exception('Target has NaN values!')
-        
+            
     df = pd.DataFrame({'feature': feature, 'target': target})
     df_base = df.copy()
     
@@ -182,8 +182,12 @@ class DataUnderstandingPlots(object):
     --------
     >>> Coming soon!
     """
-    
-    return np.corrcoef(train_grouped['Target_mean'],test_grouped['Target_mean'])[1, 0]
+    try:
+      cor = np.corrcoef(train_grouped['Target_mean'],test_grouped['Target_mean'])[1, 0]
+      return cor
+    except:      
+      warnings.warn('An error occurred when calculating the correlation, 0 was returned')
+      return 0
                        
   def _GetTrendChanges(self, train_grouped):
     """
@@ -223,6 +227,7 @@ class DataUnderstandingPlots(object):
     
   def __draw_plot_train(self):    
       for feature in self.features:
+        
         groups, input_data = self._GetGroupedData(feature = self.db_train[feature],target = self.db_train[self.target])
         trend_changes = self._GetTrendChanges(input_data)
         
@@ -287,6 +292,7 @@ class DataUnderstandingPlots(object):
         ax1.set_ylim(xlimits_p1)
         
         comment = "Trend changed " + str(trend_changes_train) + " times"          
+        comment = comment + '\n' + 'Correlation with train trend: ' + str(int(trend_correlation * 100)) + '%'
         props = dict(boxstyle='round', facecolor='wheat', alpha=0.3)
         
         ax1.text(
@@ -338,19 +344,19 @@ class DataUnderstandingPlots(object):
         plt.title('DB_TEST - Average of ' + self.target + ' wrt ' + feature)
         ax4 = plt.subplot(2, 2, 4)
         ax4.bar(
-            np.arange(len(input_data_train)), input_data_train['Samples_in_bin'], alpha=0.5)
-        ax4.set_xticks(np.arange(len(input_data_train)))
-        ax4.set_xticklabels((input_data_train['Groups']).astype('str'))
+            np.arange(len(input_data_test)), input_data_test['Samples_in_bin'], alpha=0.5)
+        ax4.set_xticks(np.arange(len(input_data_test)))
+        ax4.set_xticklabels((input_data_test['Groups']).astype('str'))
         plt.xticks(rotation=45)
         ax4.set_xlabel('Bins of ' + feature)
         ax4.set_ylabel('Bin-wise sample size')        
         plt.title('DB_TEST - Samples in bins of ' + feature)
-        plt.tight_layout()                
+        plt.tight_layout()            
         plt.show()
         
       
         
-  def draw_plot(self,features = None, target = None):
+  def plot(self,features = None, target = None):
     """
     Draws univariate dependence plots for a feature (include data_test)
 
@@ -378,3 +384,53 @@ class DataUnderstandingPlots(object):
       return self.__draw_plot_train()   
     else:
       return self.__draw_plot_test()
+    
+  def __table_train(self):
+    agg_features = dict()
+    for feature in self.features:
+      groups, input_data_train = self._GetGroupedData(feature = self.db_train[feature],target = self.db_train[self.target])
+      try:
+        input_data_train.columns = [feature, 'Samples_in_bin', self.target+'_mean']            
+      except:
+        input_data_train.columns = [feature, 'Samples_in_bin', feature+'_mean', self.target+'_mean']  
+      agg_features[feature] = input_data_train      
+    return agg_features
+  
+  def __table_test(self):
+    agg_features_train = dict()
+    agg_features_test = dict()
+    for feature in self.features:
+      # db_train case
+      groups, input_data_train = self._GetGroupedData(feature = self.db_train[feature],target = self.db_train[self.target])      
+      try:
+        input_data_train.columns = [feature, 'Samples_in_bin', self.target+'_mean']            
+      except:
+        input_data_train.columns = [feature, 'Samples_in_bin', feature+'_mean', self.target+'_mean']  
+      agg_features_train[feature] = input_data_train      
+      
+      # db_test case
+      self.bins =  groups
+      _, input_data_test = self._GetGroupedData(feature = self.db_test[feature],target = self.db_test[self.target])
+      try:
+        input_data_test.columns = [feature, 'Samples_in_bin', self.target+'_mean']            
+      except:
+        input_data_test.columns = [feature, 'Samples_in_bin', feature+'_mean', self.target+'_mean']  
+      agg_features_test[feature] = input_data_test                  
+    return dict(db_train=agg_features_train,db_test=agg_features_test)
+  
+  def tables(self):
+    """
+    Calculates summaries tables for list of features
+    
+    Return
+    ------
+    A dictionary 
+
+    Examples
+    --------
+    >>> Comming Soon!
+    """                
+    if self.db_test is None:
+      return self.__table_train()   
+    else:
+      return self.__table_test()

@@ -6,4 +6,4 @@ __author__ = """Cesar Aybar Camacho"""
 __email__ = 'csaybar@gmail.com'
 __version__ = '0.1.0'
 
-from .plots import DataUnderstandingPlots
+from .plots import DUplots
