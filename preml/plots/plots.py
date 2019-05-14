@@ -7,160 +7,192 @@ __all__ = ["get_grouped_data", "draw_plots", "get_trend_changes",
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
+import itertools
+    
+class DataUnderstandingPlots(object):
+  """
+  Create Beautiful and helpful plots for fast Data Understanding!
+  
+  Parameters
+  ----------
+  db_train: pd.DataFrame, Training Dataset  
+  db_test: pd.DataFrame, Testing Dataset
+  precision: int, default 3, parameter for the _GetGroupedData method indicate 
+             the precision at which to store and display the bins labels.
+  threshold: float, default 0.3, minimum % difference required to count as trend change.
+  """
+  def __init__(self, 
+               db_train,
+               target,
+               db_test = None,
+               bins = 10,
+               features = [],               
+               precision = 5,
+               threshold = 0.3):
+    self.db_train = db_train
+    self.db_test = db_test
+    self.target = target
+    self.bins = bins
+    self.features = features    
+    self.precision = precision
+    self.threshold = threshold
+  
+  # -----------------------------
+  @property
+  def target(self):
+    return self.__target
+  
+  @property
+  def bins(self):
+    return self.__bins
+  
+  @property 
+  def features(self):
+    return self.__features
+  
+  @property
+  def precision(self):
+    return self.__precision
+  
+  @property
+  def threshold(self):
+    return self.__threshold
+  
+  # Setter functions -----------------------------
+  @target.setter
+  def target(self,target):
+    if isinstance(target, str):
+      self.__target = target
+    else:
+      raise Exception('target must be a string')  
+      
+  @bins.setter
+  def bins(self, bins):
+    if isinstance(bins, int):
+      self.__bins = bins
+    elif isinstance(bins, list):
+      self.__bins = bins
+    else:
+      raise Exception('bins must be a int or list')
+      
+  @features.setter
+  def features(self, features):
+    if isinstance(features, list):
+      self.__features = features
+    else:
+      raise Exception('features must be a list')
 
-def get_grouped_data(input_data, feature, target_col, bins, cuts=0):
+  @precision.setter
+  def precision(self, precision):
+    if isinstance(precision, int):
+      self.__precision = precision
+    else:
+      raise Exception('precision must be a int')
+    
+  @threshold.setter
+  def threshold(self, threshold):
+    if isinstance(threshold, float):
+      self.__threshold = threshold
+    else:
+      raise Exception('threshold must be a float')    
+      
+  # Methods -----------------------------------
+  def _GetGroupedData(self, feature, target):
     """  
     Bins continuous features into equal sample size buckets and returns 
     the target mean in each bucket. Separates out nulls into another bucket.
-    
+
     Parameters
-    ----------
-    input_data: dataframe containg features and target column
-    feature: feature column name
-    target_col: target column
-    bins: Number bins required
-    cuts: if buckets of certain specific cuts are required. Used on test data to use cuts from train.
-    
+    ----------  
+    feature: PandasSeries. Categorical or Numeric feature
+    target: PandasSeries. Target binary classification
+    bins: Number bins required  
+
     Returns
     -------
-    If cuts are passed only grouped data is returned, else cuts and grouped data is returned
-    
+    A pd.DataFrame  
+
     Examples
     --------
     >>> Comming Soon!
-    """
-    has_null = pd.isnull(input_data[feature]).sum() > 0
-    if has_null == 1:
-        data_null = input_data[pd.isnull(input_data[feature])]
-        input_data = input_data[~pd.isnull(input_data[feature])]
-        input_data.reset_index(inplace=True, drop=True)
-    is_train = 0
-    if cuts == 0:
-        is_train = 1
-        prev_cut = min(input_data[feature]) - 1
-        cuts = [prev_cut]
-        reduced_cuts = 0
-        for i in range(1, bins + 1):
-            next_cut = np.percentile(input_data[feature], i * 100 / bins)
-            if next_cut > prev_cut + .000001:  # float numbers shold be compared with some threshold!
-                cuts.append(next_cut)
-            else:
-                reduced_cuts = reduced_cuts + 1
-            prev_cut = next_cut
-        # if reduced_cuts>0:
-        #     print('Reduced the number of bins due to less variation in feature')
-        cut_series = pd.cut(input_data[feature], cuts)
-    else:
-        cut_series = pd.cut(input_data[feature], cuts)
-    grouped = input_data.groupby(
-        [cut_series], as_index=True).agg({
-            target_col: [np.size, np.mean],
-            feature: [np.mean]
-        })
-    grouped.columns = [
-        '_'.join(cols).strip() for cols in grouped.columns.values
-    ]
-    grouped[grouped.index.name] = grouped.index
-    grouped.reset_index(inplace=True, drop=True)
-    grouped = grouped[[feature] + list(grouped.columns[0:3])]
-    grouped = grouped.rename(
-        index=str, columns={
-            target_col + '_size': 'Samples_in_bin'
-        })
-    grouped = grouped.reset_index(drop=True)
-    corrected_bin_name = '[' + str(min(input_data[feature])) + ', ' + str(
-        grouped.loc[0, feature]).split(',')[1]
-    grouped[feature] = grouped[feature].astype('category')
-    grouped[feature] = grouped[feature].cat.add_categories(corrected_bin_name)
-    grouped.loc[0, feature] = corrected_bin_name
-    if has_null == 1:
-        grouped_null = grouped.loc[0:0, :].copy()
-        grouped_null[feature] = grouped_null[feature].astype('category')
-        grouped_null[feature] = grouped_null[feature].cat.add_categories(
-            'Nulls')
-        grouped_null.loc[0, feature] = 'Nulls'
-        grouped_null.loc[0, 'Samples_in_bin'] = len(data_null)
-        grouped_null.loc[0, target_col + '_mean'] = data_null[
-            target_col].mean()
-        grouped_null.loc[0, feature + '_mean'] = np.nan
-        grouped[feature] = grouped[feature].astype('str')
-        grouped = pd.concat([grouped_null, grouped], axis=0)
-        grouped.reset_index(inplace=True, drop=True)
-    grouped[feature] = grouped[feature].astype('str').astype('category')
-    if is_train == 1:
-        return (cuts, grouped)
-    else:
-        return (grouped)
-
-def draw_plots(input_data, feature, target_col, trend_correlation=None):
-    """
-    Draws univariate dependence plots for a feature
+    """    
+    
+    if sum(target.isnull()) > 0:
+      raise Exception('Target has NaN values!')
         
+    df = pd.DataFrame({'feature': feature, 'target': target})
+    df_base = df.copy()
+    
+    # "feature": categorical or object dtype.
+    if str(feature.dtype) == 'object' or str(feature.dtype) == 'category':
+      df = df.groupby('feature').agg({
+          'feature': ['count'],
+          'target': ['mean']
+      }).reset_index()
+      df.columns = ['Groups', 'Samples_in_bin', 'Target_mean']
+      gr_unique = df['Groups'].tolist()
+    # "feature": numeric dtype
+    else:
+      if isinstance(self.bins, int):
+        df['groups'] = pd.qcut(df['feature'], self.bins, precision=self.precision)
+      elif isinstance(self.bins, list):
+        df['groups'] = pd.cut(df['feature'], self.bins, precision=self.precision)
+      else:
+        raise Exception('"bin" argument only supports either integer or list')
+      df = df.groupby('groups').agg({
+          'feature': ['count', 'mean'],
+          'target': ['mean']
+      }).reset_index()
+      df.columns = ['Groups', 'Samples_in_bin', 'Feature_mean', 'Target_mean']
+      # Extracting categories
+      group_range = list(
+          itertools.chain(*[(x.left, x.right)
+                            for x in df['Groups'].cat.categories]))
+      gr_unique = pd.Series(group_range).unique().tolist()
+      
+    # Adding nan info if this exists
+    if sum(feature.isnull()) > 0:
+      add_nan = df_base[df_base['feature'].isnull()].agg({
+          'target': ['count', 'mean']
+      }).values
+      nan_info = pd.DataFrame({
+          'Groups': np.NaN,
+          'Samples_in_bin': add_nan[0],
+          'Feature_mean': np.NaN,
+          'Target_mean': add_nan[1]
+      })
+      return gr_unique, pd.concat([nan_info, df]).reset_index(drop=True)
+    else:
+      return gr_unique, df
+      
+  def _GetTrendCorrelation(self, train_grouped, test_grouped):
+    """
+    Calculates correlation between train and test trend of feature wrt target. See _GetGroupedData.
+    
     Parameters
     ----------
-    input_data: grouped data contained bins of feature and target mean.
-    feature: feature column name
-    target_col: target column
-    trend_correlation: correlation between train and test trends of feature wrt target
+    train_grouped: train grouped data
+    test_grouped: test grouped data
     
     Return
     ------
-    Draws trend plots for feature
+    trend correlation between train and test group
     
     Examples
     --------
-    >>> Comming Soon!
+    >>> Coming soon!
     """
-    trend_changes = get_trend_changes(
-        grouped_data=input_data, feature=feature, target_col=target_col)
-    plt.figure(figsize=(12, 5))
-    ax1 = plt.subplot(1, 2, 1)
-    ax1.plot(input_data[target_col + '_mean'], marker='o')
-    ax1.set_xticks(np.arange(len(input_data)))
-    ax1.set_xticklabels((input_data[feature]).astype('str'))
-    plt.xticks(rotation=45)
-    ax1.set_xlabel('Bins of ' + feature)
-    ax1.set_ylabel('Average of ' + target_col)
-    comment = "Trend changed " + str(trend_changes) + " times"
-    if trend_correlation == 0:
-        comment = comment + '\n' + 'Correlation with train trend: NA'
-    elif trend_correlation != None:
-        comment = comment + '\n' + 'Correlation with train trend: ' + str(
-            int(trend_correlation * 100)) + '%'
-    props = dict(boxstyle='round', facecolor='wheat', alpha=0.3)
-    ax1.text(
-        0.05,
-        0.95,
-        comment,
-        fontsize=12,
-        verticalalignment='top',
-        bbox=props,
-        transform=ax1.transAxes)
-    plt.title('Average of ' + target_col + ' wrt ' + feature)
-    ax2 = plt.subplot(1, 2, 2)
-    ax2.bar(
-        np.arange(len(input_data)), input_data['Samples_in_bin'], alpha=0.5)
-    ax2.set_xticks(np.arange(len(input_data)))
-    ax2.set_xticklabels((input_data[feature]).astype('str'))
-    plt.xticks(rotation=45)
-    ax2.set_xlabel('Bins of ' + feature)
-    ax2.set_ylabel('Bin-wise sample size')
-    plt.title('Samples in bins of ' + feature)
-    plt.tight_layout()
-    plt.show()
-
-def get_trend_changes(grouped_data, feature, target_col, threshold=0.03):
+    
+    return np.corrcoef(train_grouped['Target_mean'],test_grouped['Target_mean'])[1, 0]
+                       
+  def _GetTrendChanges(self, train_grouped):
     """
     Calculates number of times the trend of feature wrt target changed direction.
     
     Parameters
     ----------
+    train_grouped: train grouped data
     
-    grouped_data: grouped dataset
-    feature: feature column name
-    target_col: target column
-    threshold: minimum % difference required to count as trend change
-
     Return
     ------
     Number of trend chagnes for the feature
@@ -169,223 +201,180 @@ def get_trend_changes(grouped_data, feature, target_col, threshold=0.03):
     --------
     >>> Comming soon!
     """
-    grouped_data = grouped_data.loc[
-        grouped_data[feature] != 'Nulls', :].reset_index(drop=True)
-    target_diffs = grouped_data[target_col + '_mean'].diff()
-    target_diffs = target_diffs[~np.isnan(target_diffs)].reset_index(drop=True)
-    max_diff = grouped_data[target_col + '_mean'].max(
-    ) - grouped_data[target_col + '_mean'].min()
-    target_diffs_mod = target_diffs.fillna(0).abs()
-    low_change = target_diffs_mod < threshold * max_diff
-    target_diffs_norm = target_diffs.divide(target_diffs_mod)
-    target_diffs_norm[low_change] = 0
-    target_diffs_norm = target_diffs_norm[target_diffs_norm != 0]
-    target_diffs_lvl2 = target_diffs_norm.diff()
+    train_grouped = train_grouped[train_grouped['Groups']
+                                  .notnull()].reset_index(drop=True)
+    target_f = train_grouped['Target_mean']
+    target_diffs = target_f.diff()[1:]  # Because zero index always be np.NaN
+    max_diff = target_f.max() - target_f.min()
+    
+    target_diffs_mod = target_diffs.abs()
+    low_change = target_diffs_mod < (self.threshold * max_diff)  
+    target_diffs_norm = target_diffs.divide(target_diffs_mod)  
+    target_diffs_lvl2 = target_diffs_norm[~low_change].diff()
+        
     changes = target_diffs_lvl2.fillna(0).abs() / 2
-    tot_trend_changes = int(changes.sum()) if ~np.isnan(changes.sum()) else 0
-    return (tot_trend_changes)
     
-def get_trend_correlation(grouped, grouped_test, feature, target_col):
-    """
-    Calculates correlation between train and test trend of feature wrt target.
-    
-    Parameters
-    ----------
-    grouped: train grouped data
-    grouped_test: test grouped data
-    feature: feature column name
-    target_col: target column name
-    
-    Return
-    ------
-    trend correlation between train and test
-    
-    Examples
-    --------
-    >>> Coming soon!
-    """
-    grouped = grouped[grouped[feature] != 'Nulls'].reset_index(drop=True)
-    grouped_test = grouped_test[grouped_test[feature] != 'Nulls'].reset_index(drop=True)
-    if grouped_test.loc[0, feature] != grouped.loc[0, feature]:
-        grouped_test[feature] = grouped_test[feature].cat.add_categories(grouped.loc[0, feature])
-        grouped_test.loc[0, feature] = grouped.loc[0, feature]
-    grouped_test_train = grouped.merge(grouped_test[[feature, target_col + '_mean']], on=feature, how='left',
-                                       suffixes=('', '_test'))
-    nan_rows = pd.isnull(grouped_test_train[target_col + '_mean']) | pd.isnull(
-        grouped_test_train[target_col + '_mean_test'])
-    grouped_test_train = grouped_test_train.loc[~nan_rows, :]
-    if len(grouped_test_train) > 1:
-        trend_correlation = np.corrcoef(grouped_test_train[target_col + '_mean'],
-                                        grouped_test_train[target_col + '_mean_test'])[0, 1]
+    if ~np.isnan(changes.sum()):
+      tot_trend_changes = int(changes.sum())
     else:
-        trend_correlation = 0
-        print("Only one bin created for " + feature + ". Correlation can't be calculated")
-    return (trend_correlation)
-
-def univariate_plotter(feature, data, target_col, bins=10, data_test=0):
-    """
-    Calls the draw plot function and editing around the plots
+      tot_trend_changes = 0
+      
+    return tot_trend_changes
     
+  def __draw_plot_train(self):    
+      for feature in self.features:
+        groups, input_data = self._GetGroupedData(feature = self.db_train[feature],target = self.db_train[self.target])
+        trend_changes = self._GetTrendChanges(input_data)
+        
+        # Plot parameters -------
+        plt.figure(figsize=(12, 5))
+        ax1 = plt.subplot(1, 2, 1)
+        ax1.plot(input_data["Target_mean"], marker='o')
+        ax1.set_xticks(np.arange(len(input_data)))
+        plt.xticks(rotation=45)
+        ax1.set_xlabel('Bins of ' + feature)
+        ax1.set_ylabel('Average of ' + self.target)
+        ax1.set_xticklabels((input_data['Groups']).astype('str'))
+        
+        comment = "Trend changed " + str(trend_changes) + " times"          
+        props = dict(boxstyle='round', facecolor='wheat', alpha=0.3)
+        
+        ax1.text(
+        0.05,
+        0.95,
+        comment,
+        fontsize=12,
+        verticalalignment='top',
+        bbox=props,
+        transform=ax1.transAxes)
+                
+        plt.title('Average of ' + self.target + ' wrt ' + feature)
+        ax2 = plt.subplot(1, 2, 2)
+        ax2.bar(
+            np.arange(len(input_data)), input_data['Samples_in_bin'], alpha=0.5)
+        ax2.set_xticks(np.arange(len(input_data)))
+        ax2.set_xticklabels((input_data['Groups']).astype('str'))
+        plt.xticks(rotation=45)
+        ax2.set_xlabel('Bins of ' + feature)
+        ax2.set_ylabel('Bin-wise sample size')
+        plt.title('Samples in bins of ' + feature)
+        plt.tight_layout()        
+        
+        plt.show()
+      
+  def __draw_plot_test(self):
+      for feature in self.features:
+        groups, input_data_train = self._GetGroupedData(feature = self.db_train[feature],target = self.db_train[self.target])
+        _, input_data_test = self._GetGroupedData(feature = self.db_test[feature],target = self.db_test[self.target])
+        trend_changes_train = self._GetTrendChanges(input_data_train)
+        trend_changes_test = self._GetTrendChanges(input_data_test)
+        trend_correlation = self._GetTrendCorrelation(input_data_train, input_data_test)
+        
+        xlimits = np.array([input_data_train['Target_mean'].min(), input_data_train['Target_mean'].max(),
+                   input_data_test['Target_mean'].min(), input_data_test['Target_mean'].max()])
+        extra_space = (xlimits.max() - xlimits.min())*0.05
+        xlimits_p1 = (xlimits.min()-extra_space,xlimits.max()+extra_space)
+        
+        # Plot parameters _train -------
+        plt.figure(figsize=(12, 5))
+        ax1 = plt.subplot(2, 2, 1)
+        ax1.plot(input_data_train["Target_mean"], marker='o')
+        ax1.set_xticks(np.arange(len(input_data_train)))
+        plt.xticks(rotation=45)
+        ax1.set_xlabel('Bins of ' + feature)
+        ax1.set_ylabel('Average of ' + self.target)
+        ax1.set_xticklabels((input_data_train['Groups']).astype('str'))
+        ax1.set_ylim(xlimits_p1)
+        
+        comment = "Trend changed " + str(trend_changes_train) + " times"          
+        props = dict(boxstyle='round', facecolor='wheat', alpha=0.3)
+        
+        ax1.text(
+        0.05,
+        0.95,
+        comment,
+        fontsize=12,
+        verticalalignment='top',
+        bbox=props,
+        transform=ax1.transAxes)
+                
+        plt.title('DB_TRAIN - Average of ' + self.target + ' wrt ' + feature)
+        ax2 = plt.subplot(2, 2, 2)
+        ax2.bar(
+            np.arange(len(input_data_train)), input_data_train['Samples_in_bin'], alpha=0.5)
+        ax2.set_xticks(np.arange(len(input_data_train)))
+        ax2.set_xticklabels((input_data_train['Groups']).astype('str'))
+        plt.xticks(rotation=45)
+        ax2.set_xlabel('Bins of ' + feature)
+        ax2.set_ylabel('Bin-wise sample size')        
+        plt.title('DB_TRAIN - Samples in bins of ' + feature)
+        plt.tight_layout()                
+        plt.show()
+        
+        # Plot parameters _test -------
+        
+        plt.figure(figsize=(12, 5))
+        ax3 = plt.subplot(2, 2, 3)
+        ax3.plot(input_data_test["Target_mean"], marker='o')
+        ax3.set_xticks(np.arange(len(input_data_test)))
+        plt.xticks(rotation=45)
+        ax3.set_xlabel('Bins of ' + feature)
+        ax3.set_ylabel('Average of ' + self.target)
+        ax3.set_xticklabels((input_data_test['Groups']).astype('str'))
+        ax3.set_ylim(xlimits_p1)
+        
+        comment = "Trend changed " + str(trend_changes_test) + " times"          
+        props = dict(boxstyle='round', facecolor='wheat', alpha=0.3)
+        
+        ax1.text(
+        0.05,
+        0.95,
+        comment,
+        fontsize=12,
+        verticalalignment='top',
+        bbox=props,
+        transform=ax1.transAxes)
+                
+        plt.title('DB_TEST - Average of ' + self.target + ' wrt ' + feature)
+        ax4 = plt.subplot(2, 2, 4)
+        ax4.bar(
+            np.arange(len(input_data_train)), input_data_train['Samples_in_bin'], alpha=0.5)
+        ax4.set_xticks(np.arange(len(input_data_train)))
+        ax4.set_xticklabels((input_data_train['Groups']).astype('str'))
+        plt.xticks(rotation=45)
+        ax4.set_xlabel('Bins of ' + feature)
+        ax4.set_ylabel('Bin-wise sample size')        
+        plt.title('DB_TEST - Samples in bins of ' + feature)
+        plt.tight_layout()                
+        plt.show()
+        
+      
+        
+  def draw_plot(self,features = None, target = None):
+    """
+    Draws univariate dependence plots for a feature (include data_test)
+
     Parameters
     ----------
+    input_data: grouped data contained bins of feature and target mean.
     feature: feature column name
-    data: dataframe containing features and target columns
-    target_col: target column name
-    bins: number of bins to be created from continuous feature
-    data_test: test data which has to be compared with input data for correlation
-    
+    target_col: target column
+    trend_correlation: correlation between train and test trends of feature wrt target
+
     Return
     ------
-    grouped data if only train passed, else (grouped train data, grouped test data)
-    
+    Draws trend plots for feature
+
     Examples
-    -------
-    >>> Coming soon
-    """
-    print(' {:^100} '.format('Plots for ' + feature))
-    if data[feature].dtype == 'O':
-        print('Categorical feature not supported')
+    --------
+    >>> Comming Soon!
+    """                
+    if isinstance(features,list):
+      self.features = features
+    if isinstance(target, str):
+      self.target = target
+          
+    if self.db_test is None:
+      return self.__draw_plot_train()   
     else:
-        cuts, grouped = get_grouped_data(
-            input_data=data, feature=feature, target_col=target_col, bins=bins)
-        has_test = type(data_test) == pd.core.frame.DataFrame
-        if has_test:
-            grouped_test = get_grouped_data(
-                input_data=data_test.reset_index(drop=True),
-                feature=feature,
-                target_col=target_col,
-                bins=bins,
-                cuts=cuts)
-            trend_corr = get_trend_correlation(grouped, grouped_test, feature,
-                                               target_col)
-            print(' {:^100} '.format('Train data plots'))
-            draw_plots(
-                input_data=grouped, feature=feature, target_col=target_col)
-            print(' {:^100} '.format('Test data plots'))
-            draw_plots(
-                input_data=grouped_test,
-                feature=feature,
-                target_col=target_col,
-                trend_correlation=trend_corr)
-        else:
-            draw_plots(
-                input_data=grouped, feature=feature, target_col=target_col)
-        print(
-            '--------------------------------------------------------------------------------------------------------------'
-        )
-        print('\n')
-        if has_test:
-            return (grouped, grouped_test)
-        else:
-            return (grouped)
-
-def get_univariate_plots(data,
-                         target_col,
-                         features_list=0,
-                         bins=10,
-                         data_test=0):
-    """
-    Creates univariate dependence plots for features in the dataset
-    
-    Parameters
-    ----------
-    
-    data: dataframe containing features and target columns
-    target_col: target column name
-    features_list: by default creates plots for all features. If list passed, creates plots of only those features.
-    bins: number of bins to be created from continuous feature
-    data_test: test data which has to be compared with input data for correlation
-    
-    Return
-    ------
-    Draws univariate plots for all columns in data
-    
-    Examples
-    --------
-    >>> Coming Soon!
-    """
-    if type(features_list) == int:
-        features_list = list(data.columns)
-        features_list.remove(target_col)
-    for cols in features_list:
-        if cols != target_col and data[cols].dtype == 'O':
-            print(cols +
-                  ' is categorical. Categorical features not supported yet.')
-        elif cols != target_col and data[cols].dtype != 'O':
-            univariate_plotter(
-                feature=cols,
-                data=data,
-                target_col=target_col,
-                bins=bins,
-                data_test=data_test)
-
-def get_trend_stats(data, target_col, features_list=0, bins=10, data_test=0):
-    """
-    Calculates trend changes and correlation between train/test for list of features
-    
-    Parameters
-    ----------
-    data: dataframe containing features and target columns
-    target_col: target column name
-    features_list: by default creates plots for all features. If list passed, creates plots of only those features.
-    bins: number of bins to be created from continuous feature
-    data_test: test data which has to be compared with input data for correlation
-    
-    Return
-    ------
-    dataframe with trend changes and trend correlation (if test data passed)
-    
-    Examples
-    --------
-    >>> Coming Soon!
-    """
-    if type(features_list) == int:
-        features_list = list(data.columns)
-        features_list.remove(target_col)
-    stats_all = []
-    has_test = type(data_test) == pd.core.frame.DataFrame
-    ignored = []
-    for feature in features_list:
-        if data[feature].dtype == 'O' or feature == target_col:
-            ignored.append(feature)
-        else:
-            cuts, grouped = get_grouped_data(
-                input_data=data,
-                feature=feature,
-                target_col=target_col,
-                bins=bins)
-            trend_changes = get_trend_changes(
-                grouped_data=grouped, feature=feature, target_col=target_col)
-            if has_test:
-                grouped_test = get_grouped_data(
-                    input_data=data_test.reset_index(drop=True),
-                    feature=feature,
-                    target_col=target_col,
-                    bins=bins,
-                    cuts=cuts)
-                trend_corr = get_trend_correlation(grouped, grouped_test,
-                                                   feature, target_col)
-                trend_changes_test = get_trend_changes(
-                    grouped_data=grouped_test,
-                    feature=feature,
-                    target_col=target_col)
-                stats = [
-                    feature, trend_changes, trend_changes_test, trend_corr
-                ]
-            else:
-                stats = [feature, trend_changes]
-            stats_all.append(stats)
-    stats_all_df = pd.DataFrame(stats_all)
-    stats_all_df.columns = ['Feature',
-                            'Trend_changes'] if has_test == False else [
-                                'Feature', 'Trend_changes',
-                                'Trend_changes_test', 'Trend_correlation'
-                            ]
-    if len(ignored) > 0:
-        print('Categorical features ' + str(ignored) +
-              ' ignored. Categorical features not supported yet.')
-    print('Returning stats for all numeric features')
-    return (stats_all_df)
-
-
-
+      return self.__draw_plot_test()
