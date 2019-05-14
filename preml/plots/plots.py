@@ -2,13 +2,16 @@ from __future__ import division, absolute_import, print_function
     
 __all__ = ["DUplots"]
 
+import missingno as msno
 import pandas as pd
 import numpy as np
-from matplotlib import pyplot as plt
+import seaborn as sns
+import matplotlib.pyplot as plt
 import itertools
     
 import itertools
 import warnings
+
 class DUplots(object):
   """
   Create Beautiful and helpful plots for fast Data Understanding!
@@ -23,7 +26,7 @@ class DUplots(object):
   """
   def __init__(self, 
                db_train,
-               target,
+               target = 'Target',
                db_test = None,
                bins = 10,
                features = [],               
@@ -434,3 +437,90 @@ class DUplots(object):
       return self.__table_train()   
     else:
       return self.__table_test()
+
+  def __cor_train(self, remove = [], fig_size = (12,5), annot = True):
+    clean_db = self.db_train.drop(remove,axis=1)
+    corr = clean_db.corr()
+  
+    #Generate a mask for the upper triangle
+    mask = np.zeros_like(corr, dtype=np.bool)
+    mask[np.triu_indices_from(mask)] = True
+  
+    # Set up the matplotlib figure
+    fig = plt.figure(figsize=fig_size)
+    # Generate a custom diverging colormap
+    cmap = sns.diverging_palette(220, 10, as_cmap=True)
+  
+    # Draw the heatmap with the mask and correct aspect ratio    
+    sns.heatmap(corr, mask=mask, cmap=cmap, vmax=.3, annot=annot, center=0,
+                square=True, linewidths=.5, cbar_kws={"shrink": .5})  
+    plt.show()
+  
+  
+  def __cor_test(self, remove = [], fig_size = (12,5), annot =True):
+    clean_db_train = self.db_train.drop(remove,axis=1)
+    corr_train = clean_db_train.corr()
+    
+    clean_db_test = self.db_test.drop(remove,axis=1)
+    corr_test = clean_db_test.corr()
+    
+    #Generate a mask for the upper triangle
+    mask_train = np.zeros_like(corr_train, dtype=np.bool)
+    mask_train[np.triu_indices_from(mask_train)] = True
+  
+    mask_test = np.zeros_like(corr_test, dtype=np.bool)
+    mask_test[np.triu_indices_from(mask_test)] = True
+    
+    
+    # Set up the matplotlib figure
+    fig = plt.figure(figsize=fig_size)
+    ax1 = fig.add_subplot(1,2,1)
+    ax1.set_title('DB_TRAIN')
+    ax2 = fig.add_subplot(1,2,2)
+    ax2.set_title('DB_TEST')
+    # Generate a custom diverging colormap
+    cmap = sns.diverging_palette(220, 10, as_cmap=True)
+  
+    # Draw the heatmap with the mask and correct aspect ratio
+    sns.heatmap(corr_train, mask=mask_train, cmap=cmap, vmax=.3, annot=annot, center=0,
+                square=True, linewidths=.5, cbar_kws={"shrink": .5},ax = ax1)
+    sns.heatmap(corr_test, mask=mask_test, cmap=cmap, vmax=.3, annot=annot, center=0,
+                square=True, linewidths=.5, cbar_kws={"shrink": .5},ax = ax2)
+    plt.show()
+    
+  def corplot(self, remove = [], fig_size = (12,5),annot=True):
+    """
+    Create a cor plot easily!
+    
+    Return
+    ------
+    A dictionary 
+
+    Examples
+    --------
+    >>> Comming Soon!
+    """                
+    if self.db_test is None:
+      return self.__cor_train(remove=remove, fig_size=fig_size, annot=annot)
+    else:
+      return self.__cor_test(remove=remove, fig_size=fig_size, annot=annot)
+    
+  def missingplot(self, remove = [], figsize = (12,5),**kwargs):
+    if self.db_test is None:
+      clean_db_train = self.db_train.drop(remove,axis=1)
+      msno.matrix(clean_db_train,kwargs,figsize=figsize)
+    else:
+      clean_db_test = self.db_test.drop(remove,axis=1)
+      clean_db_train = self.db_train.drop(remove,axis=1)
+      msno.matrix(clean_db_train,kwargs,figsize=figsize)
+      msno.matrix(clean_db_test,kwargs,figsize=figsize)  
+  
+  def missingbar(self, remove = [], figsize = (12,5),**kwargs):
+    if self.db_test is None:
+      clean_db_train = self.db_train.drop(remove,axis=1)
+      msno.bar(clean_db_train,figsize,**kwargs)
+    else:
+      clean_db_test = self.db_test.drop(remove,axis=1)
+      clean_db_train = self.db_train.drop(remove,axis=1)
+      msno.bar(clean_db_train,figsize,**kwargs)
+      msno.bar(clean_db_test,figsize,**kwargs)
