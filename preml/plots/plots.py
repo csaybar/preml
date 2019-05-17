@@ -48,7 +48,7 @@ class DUplots(object):
   @property
   def bins(self):
     return self.__bins
-  
+    
   @property 
   def features(self):
     return self.__features
@@ -524,3 +524,14 @@ class DUplots(object):
       clean_db_train = self.db_train.drop(remove,axis=1)
       msno.bar(clean_db_train,figsize,**kwargs)
       msno.bar(clean_db_test,figsize,**kwargs)
+  def catplot(self):
+    if self.db_test is None:
+      pass
+    else:
+      fig, [axis0,axis1] = plt.subplots(1,2,figsize=(10,5))
+      df[feature_name].value_counts().plot.pie(autopct='%1.1f%%',ax=axis0)
+      sns.countplot(x=feature_name, hue=target_name, data=df,
+                    palette=palettemap,ax=axis1)
+      plt.show()
+  def contplot(self):
+    pass

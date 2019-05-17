@@ -6,4 +6,4 @@ __author__ = """Cesar Aybar Camacho"""
 __email__ = 'csaybar@gmail.com'
 __version__ = '0.1.0'
 
-from .go_unique import go_unique
+from .re_transform import re_transform
