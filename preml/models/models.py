@@ -6,10 +6,12 @@ __all__ = ['BayesianOptimization','show_parameter', 'lr_decayp', 'lightgbm_fitpa
 
 import lightgbm as lgbm
 from sklearn.base import BaseEstimator
+from sklearn.model_selection import cross_val_score
 from hyperopt import hp
 from hyperopt import tpe
 from hyperopt.fmin import fmin
 import numpy as np
+
 class BayesianOptimization(BaseEstimator):
   '''
   Class wrapper for easily use of Hyperopt - Tree-structured Parzen Estimator model
